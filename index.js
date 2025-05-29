@@ -66,24 +66,6 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
     const socket = new net.Socket();
 
     // // Convert content to raw printer commands
-    // const commands = [];
-    // // Initialize printer
-    // commands.push(Buffer.from([0x1b, 0x40])); // ESC @
-    // commands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-    //
-    // // Add content
-    // commands.push(Buffer.from(content, "utf8"));
-    // // Add blank lines and wait before cutting
-    // commands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-    //
-    // // Add a small delay command (optional - some printers support this)
-    // // commands.push(Buffer.from([0x1b, 0x61, 0x01])); // ESC a 1 (center align as delay)
-    //
-    // // Cut paper
-    // commands.push(Buffer.from([0x1d, 0x56, 0x00])); // GS V 0 (full cut)
-    //
-    // const rawData = Buffer.concat(commands);
-    //
     // Set timeout
     const timeoutHandler = setTimeout(() => {
       socket.destroy();
@@ -99,8 +81,10 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
       // Send content first (without cut command)
       const contentCommands = [];
       contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+
       contentCommands.push(Buffer.from(content, "utf8"));
+
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
       contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
 
       const contentData = Buffer.concat(contentCommands);
@@ -120,13 +104,13 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
       });
 
       // Fallback if drain doesn't fire
-      setTimeout(() => {
-        if (!socket.destroyed) {
-          const cutCommand = Buffer.from([0x1d, 0x56, 0x00]);
-          socket.write(cutCommand);
-          setTimeout(() => socket.end(), 500);
-        }
-      }, 1500);
+      // setTimeout(() => {
+      //   if (!socket.destroyed) {
+      //     const cutCommand = Buffer.from([0x1d, 0x56, 0x00]);
+      //     socket.write(cutCommand);
+      //     setTimeout(() => socket.end(), 500);
+      //   }
+      // }, 1500);
     });
 
     // Handle successful close
@@ -155,68 +139,6 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
     });
   });
 }
-
-// Function to send data to printer
-// async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
-//   return new Promise((resolve) => {
-//     const socket = new net.Socket();
-//
-//     // Convert content to raw printer commands
-//     const commands = [];
-//
-//     // Initialize printer
-//     commands.push(Buffer.from([0x1b, 0x40])); // ESC @
-//
-//     commands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-//
-//     // Add content
-//     commands.push(Buffer.from(content, "utf8"));
-//
-//     // Add 2 blank lines
-//     commands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-//
-//     // Cut paper
-//     commands.push(Buffer.from([0x1d, 0x56, 0x00])); // GS V 0 (full cut)
-//
-//     const rawData = Buffer.concat(commands);
-//
-//     // Set timeout
-//     const timeoutHandler = setTimeout(() => {
-//       socket.destroy();
-//       resolve({
-//         success: false,
-//         message: "Connection timeout",
-//         printer: `${ip}:${port}`,
-//       });
-//     }, timeout);
-//
-//     // Connect to printer
-//     socket.connect(port, ip, () => {
-//       socket.write(rawData);
-//       socket.end();
-//       clearTimeout(timeoutHandler);
-//
-//       console.log(`Print job sent to ${ip}:${port}`);
-//       resolve({
-//         success: true,
-//         message: "Print job sent successfully",
-//         printer: `${ip}:${port}`,
-//         timestamp: new Date().toISOString(),
-//       });
-//     });
-//
-//     // Handle errors
-//     socket.on("error", (err) => {
-//       clearTimeout(timeoutHandler);
-//       console.error(`Print error for ${ip}:${port}:`, err.message);
-//       resolve({
-//         success: false,
-//         message: `Print failed: ${err.message}`,
-//         printer: `${ip}:${port}`,
-//       });
-//     });
-//   });
-// }
 
 // Start server
 app.listen(PORT, () => {
