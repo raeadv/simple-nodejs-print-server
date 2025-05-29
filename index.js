@@ -60,85 +60,168 @@ app.post("/print", async (req, res) => {
   }
 });
 
-// Function to send data to printer
-async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
 
-    // // Convert content to raw printer commands
-    // Set timeout
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Send content and return socket after content is fully printed
+async function sendContentToPrinter(ip, content, port = 9100, timeout = 5000, printDelay = 2000) {
+  return new Promise((resolve, reject) => {
+    const socket = new net.Socket();
+    
     const timeoutHandler = setTimeout(() => {
       socket.destroy();
-      resolve({
-        success: false,
-        message: "Connection timeout",
-        printer: `${ip}:${port}`,
-      });
+      reject(new Error('Connection timeout'));
     }, timeout);
-
-    // Connect to printer
+    
     socket.connect(port, ip, () => {
-      // Send content first (without cut command)
-      const contentCommands = [];
-      contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @
-
-      contentCommands.push(Buffer.from(content, "utf8"));
-
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-
-      const contentData = Buffer.concat(contentCommands);
-      socket.write(contentData);
-
-      // Wait for content to be sent, then send cut command
-      socket.on("drain", () => {
-        setTimeout(() => {
-          // Send cut command separately
-          const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-          socket.write(cutCommand);
-
-          setTimeout(() => {
-            socket.end();
-          }, 500); // Short delay after cut
-        }, 1000); // 1 second delay for printing
-      });
-
-      // Fallback if drain doesn't fire
-      // setTimeout(() => {
-      //   if (!socket.destroyed) {
-      //     const cutCommand = Buffer.from([0x1d, 0x56, 0x00]);
-      //     socket.write(cutCommand);
-      //     setTimeout(() => socket.end(), 500);
-      //   }
-      // }, 1500);
-    });
-
-    // Handle successful close
-    socket.on("close", () => {
-      if (!socket.destroyed) {
-        clearTimeout(timeoutHandler);
-        console.log(`Print job sent to ${ip}:${port}`);
-        resolve({
-          success: true,
-          message: "Print job sent successfully",
-          printer: `${ip}:${port}`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    });
-
-    // Handle errors
-    socket.on("error", (err) => {
       clearTimeout(timeoutHandler);
-      console.error(`Print error for ${ip}:${port}:`, err.message);
-      resolve({
-        success: false,
-        message: `Print failed: ${err.message}`,
-        printer: `${ip}:${port}`,
+      
+      // Prepare content commands (without cut)
+      const contentCommands = [];
+      contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @ (initialize)
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from(content, "utf8"));
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      
+      const contentData = Buffer.concat(contentCommands);
+      
+      socket.write(contentData, (err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // Wait for data to be sent
+        const waitForDrain = () => {
+          if (socket.writableNeedDrain) {
+            socket.once('drain', proceedAfterSend);
+          } else {
+            proceedAfterSend();
+          }
+        };
+        
+        const proceedAfterSend = () => {
+          console.log(`Content sent to ${ip}:${port}, waiting ${printDelay}ms for printing...`);
+          
+          // Wait for printing to complete, then return socket
+          setTimeout(() => {
+            console.log(`Content should be printed, returning socket for ${ip}:${port}`);
+            resolve(socket); // Return the active socket
+          }, printDelay);
+        };
+        
+        waitForDrain();
       });
+    });
+    
+    socket.on('error', (err) => {
+      clearTimeout(timeoutHandler);
+      reject(err);
     });
   });
 }
+
+// Send cut command using existing socket
+async function sendCutCommand(socket) {
+  return new Promise((resolve, reject) => {
+    if (socket.destroyed) {
+      reject(new Error('Socket is already destroyed'));
+      return;
+    }
+    
+    const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0 (full cut)
+    
+    socket.write(cutCommand, (err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      
+      console.log('Cut command sent');
+      
+      // Wait a bit for cut to complete, then close socket
+      setTimeout(() => {
+        socket.end();
+        socket.once('close', () => {
+          console.log('Socket closed after cut');
+          resolve({
+            success: true,
+            message: "Cut command sent and socket closed",
+          });
+        });
+        
+        // Force close if needed
+        setTimeout(() => {
+          if (!socket.destroyed) {
+            socket.destroy();
+            resolve({
+              success: true,
+              message: "Cut command sent and socket force closed",
+            });
+          }
+        }, 1000);
+      }, 500);
+    });
+  });
+}
+
+// Main function that combines both operations
+async function sendToPrinter(ip, content, port = 9100, timeout = 5000, printDelay = 2000) {
+  try {
+    console.log(`Starting print job for ${ip}:${port}...`);
+    
+    // Send content and get socket back when printing is done
+    const socket = await sendContentToPrinter(ip, content, port, timeout, printDelay);
+    
+    // Now send cut command using the same socket
+    const cutResult = await sendCutCommand(socket);
+    
+    console.log(`Print job completed successfully for ${ip}:${port}`);
+    return {
+      success: true,
+      message: "Print job sent successfully with cut",
+      printer: `${ip}:${port}`,
+      timestamp: new Date().toISOString(),
+    };
+    
+  } catch (error) {
+    console.error(`Print error for ${ip}:${port}:`, error.message);
+    return {
+      success: false,
+      message: `Print failed: ${error.message}`,
+      printer: `${ip}:${port}`,
+    };
+  }
+}
+
+// Alternative: Using .then() syntax as you suggested
+function sendToPrinterWithThen(ip, content, port = 9100, timeout = 5000, printDelay = 2000) {
+  return sendContentToPrinter(ip, content, port, timeout, printDelay)
+    .then(socket => {
+      console.log('Content printed, now sending cut command...');
+      return sendCutCommand(socket);
+    })
+    .then(result => {
+      console.log(`Print job completed successfully for ${ip}:${port}`);
+      return {
+        success: true,
+        message: "Print job sent successfully with cut",
+        printer: `${ip}:${port}`,
+        timestamp: new Date().toISOString(),
+      };
+    })
+    .catch(error => {
+      console.error(`Print error for ${ip}:${port}:`, error.message);
+      return {
+        success: false,
+        message: `Print failed: ${error.message}`,
+        printer: `${ip}:${port}`,
+      };
+    });
+}
+
+
 
 // Start server
 app.listen(PORT, () => {
