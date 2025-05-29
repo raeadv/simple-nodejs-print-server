@@ -1,0 +1,7 @@
+{
+  "main": "printserver.build.js",
+  "output": "printserver.blob",
+  "assets": {
+    "testpage.html": "testpage.html"
+  }
+}

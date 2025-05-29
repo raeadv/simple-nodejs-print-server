@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Print Client</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+
+      .container {
+        background: white;
+        border-radius: 10px;
+        padding: 30px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 30px;
+      }
+
+      .form-group {
+        margin: 20px 0;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #555;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+        box-sizing: border-box;
+        transition: border-color 0.3s ease;
+      }
+
+      input:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      button {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 30px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin: 10px 5px;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+
+      .result {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 20px 0;
+        font-family: monospace;
+        white-space: pre-wrap;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .success {
+        border-left: 4px solid #28a745;
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .error {
+        border-left: 4px solid #dc3545;
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .code-example {
+        background: #2d3748;
+        color: #e2e8f0;
+        padding: 15px;
+        border-radius: 5px;
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+        margin: 15px 0;
+        overflow-x: auto;
+      }
+
+      .info-box {
+        background: #e7f3ff;
+        border: 1px solid #b8daff;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 15px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🖨️ Simple Print Client</h1>
+
+      <div class="info-box">
+        <strong>Server Endpoints:</strong><br />
+        • GET /test - Check if server is running<br />
+        • POST /print - Send print job with IP and content
+      </div>
+
+      <div class="form-group">
+        <button onclick="testServer()">Test Server Connection</button>
+        <div id="testResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="printerIp">Printer IP Address:</label>
+        <input
+          type="text"
+          id="printerIp"
+          placeholder="192.168.1.100"
+          value="192.168.1.33"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="printContent">Content to Print:</label>
+        <textarea
+          id="printContent"
+          rows="8"
+          placeholder="Enter text to print..."
+        >
+Hello World!
+
+This is a test print from the web browser.
+Timestamp: ${new Date().toLocaleString()}
+
+Thank you for testing!</textarea
+        >
+      </div>
+
+      <div class="form-group">
+        <button onclick="sendPrintJob()">Send to Printer</button>
+        <button onclick="clearResults()">Clear Results</button>
+      </div>
+
+      <div id="printResult" class="result" style="display: none"></div>
+
+      <h2>📝 JavaScript Code Examples</h2>
+
+      <h3>Test Server Function:</h3>
+      <div class="code-example">
+        async function testServer() { try { const response = await
+        fetch('http://localhost:8080/test'); const result = await
+        response.json(); console.log('Server test:', result); return result; }
+        catch (error) { console.error('Server test failed:', error); return {
+        success: false, message: error.message }; } }
+      </div>
+
+      <h3>Print Function:</h3>
+      <div class="code-example">
+        async function sendPrint(printerIp, content) { try { const response =
+        await fetch('http://localhost:8080/print', { method: 'POST', headers: {
+        'Content-Type': 'application/json', }, body: JSON.stringify({ ip:
+        printerIp, content: content }) }); const result = await response.json();
+        return result; } catch (error) { console.error('Print failed:', error);
+        return { success: false, message: error.message }; } }
+      </div>
+
+      <h3>Simple Usage Example:</h3>
+      <div class="code-example">
+        // Test the server const serverStatus = await testServer();
+        console.log(serverStatus); // Send a print job const printResult = await
+        sendPrint('192.168.1.33', 'Hello Printer!'); console.log(printResult);
+      </div>
+    </div>
+
+    <script>
+      const PRINT_SERVER_URL = "http://localhost:8080";
+
+      // Test server connection
+      async function testServer() {
+        const resultDiv = document.getElementById("testResult");
+        resultDiv.style.display = "block";
+        resultDiv.textContent = "Testing server connection...";
+        resultDiv.className = "result";
+
+        try {
+          const response = await fetch(`${PRINT_SERVER_URL}/test`);
+          const result = await response.json();
+
+          resultDiv.textContent = JSON.stringify(result, null, 2);
+          resultDiv.className = "result success";
+
+          return result;
+        } catch (error) {
+          const errorResult = {
+            success: false,
+            message: `Server connection failed: ${error.message}`,
+          };
+
+          resultDiv.textContent = JSON.stringify(errorResult, null, 2);
+          resultDiv.className = "result error";
+
+          return errorResult;
+        }
+      }
+
+      // Send print job
+      async function sendPrintJob() {
+        const printerIp = document.getElementById("printerIp").value.trim();
+        const content = document.getElementById("printContent").value;
+        const resultDiv = document.getElementById("printResult");
+
+        // Validate inputs
+        if (!printerIp) {
+          alert("Please enter a printer IP address");
+          return;
+        }
+
+        if (!content) {
+          alert("Please enter content to print");
+          return;
+        }
+
+        // Show loading state
+        resultDiv.style.display = "block";
+        resultDiv.textContent = "Sending print job...";
+        resultDiv.className = "result";
+
+        try {
+          const response = await fetch(`${PRINT_SERVER_URL}/print`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ip: printerIp,
+              content: content,
+            }),
+          });
+
+          const result = await response.json();
+
+          resultDiv.textContent = JSON.stringify(result, null, 2);
+          resultDiv.className = result.success
+            ? "result success"
+            : "result error";
+        } catch (error) {
+          const errorResult = {
+            success: false,
+            message: `Request failed: ${error.message}`,
+          };
+
+          resultDiv.textContent = JSON.stringify(errorResult, null, 2);
+          resultDiv.className = "result error";
+        }
+      }
+
+      // Clear all results
+      function clearResults() {
+        document.getElementById("testResult").style.display = "none";
+        document.getElementById("printResult").style.display = "none";
+      }
+
+      // Auto-update timestamp in content
+      function updateTimestamp() {
+        const contentArea = document.getElementById("printContent");
+        const currentContent = contentArea.value;
+
+        // Replace timestamp if it exists
+        const timestampRegex = /Timestamp: .*/;
+        const newTimestamp = `Timestamp: ${new Date().toLocaleString()}`;
+
+        if (timestampRegex.test(currentContent)) {
+          contentArea.value = currentContent.replace(
+            timestampRegex,
+            newTimestamp,
+          );
+        }
+      }
+
+      // Update timestamp every 30 seconds
+      setInterval(updateTimestamp, 30000);
+
+      // Initial timestamp update
+      updateTimestamp();
+    </script>
+  </body>
+</html>

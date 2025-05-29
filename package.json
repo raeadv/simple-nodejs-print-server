@@ -1,0 +1,21 @@
+{
+  "name": "printserver",
+  "version": "1.0.0",
+  "description": "local print service",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./index.js",
+    "build": "node esbuild-bundle.js"
+  },
+  "keywords": [
+    "node",
+    "print"
+  ],
+  "author": "raeneldis a. sadra",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "esbuild": "^0.25.5",
+    "express": "^5.1.0"
+  }
+}
