@@ -49,7 +49,8 @@ app.post("/print", async (req, res) => {
     });
 
     // Send to printer
-    const result = await sendToPrinter(ip, content);
+    // const result = await sendToPrinter(ip, content);
+    const result = await sendPrintCommand(ip, content);
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -145,6 +146,86 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
   });
 }
 
+
+
+// Function to send data to printer
+async function sendPrintCommand(ip, content, port = 9100, timeout = 5000) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+
+    // // Convert content to raw printer commands
+    // Set timeout
+    const timeoutHandler = setTimeout(() => {
+      socket.destroy();
+      resolve({
+        success: false,
+        message: "Connection timeout",
+        printer: `${ip}:${port}`,
+      });
+    }, timeout);
+
+    // Connect to printer
+    const currentSocketConn = socket.connect(port, ip);
+
+    currentSocketConn.on('ready',() => {
+      const contentCommands = [];
+      contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @
+
+      contentCommands.push(Buffer.from(content, "utf8"));
+
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+
+      const contentData = Buffer.concat(contentCommands);
+
+      currentSocketConn.write(contentData);
+
+
+    })
+
+    // Wait for content to be sent, then send cut command
+      currentSocketConn.on("drain", () => {
+        setTimeout(() => {
+          // Send cut command separately
+          const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
+          currentSocketConn.write(cutCommand);
+
+          setTimeout(() => {
+            currentSocketConn.end();
+          }, 500); // Short delay after cut
+        }, 1000); // 1 second delay for printing
+      });
+
+
+    // Handle successful close
+    currentSocketConn.on("close", () => {
+      if (!currentSocketConn.destroyed) {
+        clearTimeout(timeoutHandler);
+        console.log(`Print job sent to ${ip}:${port}`);
+        resolve({
+          success: true,
+          message: "Print job sent successfully",
+          printer: `${ip}:${port}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Handle errors
+    currentSocketConn.on("error", (err) => {
+      clearTimeout(timeoutHandler);
+      console.error(`Print error for ${ip}:${port}:`, err.message);
+      resolve({
+        success: false,
+        message: `Print failed: ${err.message}`,
+        printer: `${ip}:${port}`,
+      });
+    });
+  });
+}
+
+
+
 // Start server
 app.listen(PORT, () => {
   console.log(`
@@ -156,17 +237,19 @@ app.listen(PORT, () => {
 
 // start another for test page
 const testApp = express();
+const TEST_PORT = 8000;
 
 testApp.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "testpage.html"));
 });
 
+
 // Start server
-testApp.listen(8000, () => {
+testApp.listen(TEST_PORT, () => {
   console.log(`
 🖨️  Test page started
-📡 Port: 8000
-🌐 url: http://localhost:8000/
+📡 Port: ${TEST_PORT}
+🌐 url: http://localhost:${TEST_PORT}/
   `);
 });
 
