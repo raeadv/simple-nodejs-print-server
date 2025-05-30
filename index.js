@@ -49,8 +49,8 @@ app.post("/print", async (req, res) => {
     });
 
     // Send to printer
-    // const result = await sendToPrinter(ip, content);
-    const result = await sendPrintCommand(ip, content);
+    const result = await sendToPrinter(ip, content);
+    // const result = await sendPrintCommand(ip, content);
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -85,7 +85,7 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
 
       contentCommands.push(Buffer.from(content, "utf8"));
 
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      // contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
       contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
 
       const contentData = Buffer.concat(contentCommands);
@@ -96,18 +96,7 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
       const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
       socket.write(cutCommand);
 
-      // Wait for content to be sent, then send cut command
-      socket.on("drain", () => {
-        setTimeout(() => {
-          // Send cut command separately
-          const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-          socket.write(cutCommand);
-
-          setTimeout(() => {
-            socket.end();
-          }, 500); // Short delay after cut
-        }, 1000); // 1 second delay for printing
-      });
+      
 
       // Fallback if drain doesn't fire
       // setTimeout(() => {
@@ -118,6 +107,19 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
       //   }
       // }, 1500);
     });
+
+    // Wait for content to be sent, then send cut command
+      // socket.on("drain", () => {
+      //   setTimeout(() => {
+      //     // Send cut command separately
+      //     const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
+      //     socket.write(cutCommand);
+
+      //     setTimeout(() => {
+      //       socket.end();
+      //     }, 500); // Short delay after cut
+      //   }, 1000); // 1 second delay for printing
+      // });
 
     // Handle successful close
     socket.on("close", () => {
