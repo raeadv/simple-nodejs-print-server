@@ -14,7 +14,6 @@
   "author": "raeneldis a. sadra",
   "license": "MIT",
   "dependencies": {
-    "@abandonware/noble": "^1.9.2-26",
     "cors": "^2.8.5",
     "esbuild": "^0.25.5",
     "express": "^5.1.0"
