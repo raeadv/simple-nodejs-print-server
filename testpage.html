@@ -142,6 +142,16 @@
       </div>
 
       <div class="form-group">
+        <label for="printerMac">Printer MAC Address (Bluetooth):</label>
+        <input
+          type="text"
+          id="printerMac"
+          placeholder="A1:B2:C3:D4:E5:F6"
+          value="A1:B2:C3:D4:E5:F6"
+        />
+      </div>
+
+      <div class="form-group">
         <label for="printContent">Content to Print:</label>
         <textarea
           id="printContent"
@@ -159,6 +169,7 @@ Thank you for testing!</textarea
 
       <div class="form-group">
         <button onclick="sendPrintJob()">Send to Printer</button>
+        <button onclick="sendBtPrintJob()">Send to BT Printer</button>
         <button onclick="clearResults()">Clear Results</button>
       </div>
 
@@ -254,6 +265,57 @@ Thank you for testing!</textarea
             },
             body: JSON.stringify({
               ip: printerIp,
+              content: content,
+            }),
+          });
+
+          const result = await response.json();
+
+          resultDiv.textContent = JSON.stringify(result, null, 2);
+          resultDiv.className = result.success
+            ? "result success"
+            : "result error";
+        } catch (error) {
+          const errorResult = {
+            success: false,
+            message: `Request failed: ${error.message}`,
+          };
+
+          resultDiv.textContent = JSON.stringify(errorResult, null, 2);
+          resultDiv.className = "result error";
+        }
+      }
+
+      // Send print job
+      async function sendBtPrintJob() {
+        const printerIp = document.getElementById("printerMac").value.trim();
+        const content = document.getElementById("printContent").value;
+        const resultDiv = document.getElementById("printResult");
+
+        // Validate inputs
+        if (!printerIp) {
+          alert("Please enter a printer IP address");
+          return;
+        }
+
+        if (!content) {
+          alert("Please enter content to print");
+          return;
+        }
+
+        // Show loading state
+        resultDiv.style.display = "block";
+        resultDiv.textContent = "Sending print job...";
+        resultDiv.className = "result";
+
+        try {
+          const response = await fetch(`${PRINT_SERVER_URL}/print-bluetooth`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              macAddress: printerIp,
               content: content,
             }),
           });

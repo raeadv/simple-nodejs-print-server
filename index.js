@@ -96,30 +96,8 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
       const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
       socket.write(cutCommand);
 
-      
-
-      // Fallback if drain doesn't fire
-      // setTimeout(() => {
-      //   if (!socket.destroyed) {
-      //     const cutCommand = Buffer.from([0x1d, 0x56, 0x00]);
-      //     socket.write(cutCommand);
-      //     setTimeout(() => socket.end(), 500);
-      //   }
-      // }, 1500);
     });
 
-    // Wait for content to be sent, then send cut command
-      // socket.on("drain", () => {
-      //   setTimeout(() => {
-      //     // Send cut command separately
-      //     const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-      //     socket.write(cutCommand);
-
-      //     setTimeout(() => {
-      //       socket.end();
-      //     }, 500); // Short delay after cut
-      //   }, 1000); // 1 second delay for printing
-      // });
 
     // Handle successful close
     socket.on("close", () => {
@@ -148,84 +126,206 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
   });
 }
 
+// BLUETOOTH PRINT LIBRARY
+const noble = require('@abandonware/noble');
 
+// Bluetooth print endpoint - POST /print-bluetooth
+app.post("/print-bluetooth", async (req, res) => {
+  try {
+    const { macAddress, content } = req.body;
 
-// Function to send data to printer
-async function sendPrintCommand(ip, content, port = 9100, timeout = 5000) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-
-    // // Convert content to raw printer commands
-    // Set timeout
-    const timeoutHandler = setTimeout(() => {
-      socket.destroy();
-      resolve({
+    if (!macAddress) {
+      return res.status(400).json({
         success: false,
-        message: "Connection timeout",
-        printer: `${ip}:${port}`,
+        message: "Printer MAC address is required",
       });
+    }
+
+    if (!content) {
+      return res.status(400).json({
+        success: false,
+        message: "Print content is required",
+      });
+    }
+
+    console.log({
+      message: "Bluetooth print request received",
+      printer: macAddress,
+      content: content,
+    });
+
+    const result = await sendToBluetoothPrinter(macAddress, content);
+    res.json(result);
+  } catch (error) {
+    console.error("Bluetooth print error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+async function sendToBluetoothPrinter(macAddress, content, timeout = 15000) {
+  return new Promise((resolve) => {
+    let isResolved = false;
+    let targetPeripheral = null;
+    let writeCharacteristic = null;
+
+    const timeoutHandler = setTimeout(() => {
+      if (!isResolved) {
+        isResolved = true;
+        noble.stopScanning();
+        if (targetPeripheral && targetPeripheral.state === 'connected') {
+          targetPeripheral.disconnect();
+        }
+        resolve({
+          success: false,
+          message: "Bluetooth connection timeout",
+          printer: macAddress,
+        });
+      }
     }, timeout);
 
-    // Connect to printer
-    const currentSocketConn = socket.connect(port, ip);
+    const cleanup = () => {
+      clearTimeout(timeoutHandler);
+      noble.stopScanning();
+    };
 
-    currentSocketConn.on('ready',() => {
-      const contentCommands = [];
-      contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @
-
-      contentCommands.push(Buffer.from(content, "utf8"));
-
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-
-      const contentData = Buffer.concat(contentCommands);
-
-      currentSocketConn.write(contentData);
-
-
-    })
-
-    // Wait for content to be sent, then send cut command
-      currentSocketConn.on("drain", () => {
-        setTimeout(() => {
-          // Send cut command separately
-          const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-          currentSocketConn.write(cutCommand);
-
-          setTimeout(() => {
-            currentSocketConn.end();
-          }, 500); // Short delay after cut
-        }, 1000); // 1 second delay for printing
-      });
-
-
-    // Handle successful close
-    currentSocketConn.on("close", () => {
-      if (!currentSocketConn.destroyed) {
-        clearTimeout(timeoutHandler);
-        console.log(`Print job sent to ${ip}:${port}`);
-        resolve({
-          success: true,
-          message: "Print job sent successfully",
-          printer: `${ip}:${port}`,
-          timestamp: new Date().toISOString(),
-        });
+    // Start scanning when Bluetooth is ready
+    noble.on('stateChange', (state) => {
+      if (state === 'poweredOn') {
+        console.log('Starting BLE scan for printer...');
+        noble.startScanning([], false);
       }
     });
 
-    // Handle errors
-    currentSocketConn.on("error", (err) => {
-      clearTimeout(timeoutHandler);
-      console.error(`Print error for ${ip}:${port}:`, err.message);
-      resolve({
-        success: false,
-        message: `Print failed: ${err.message}`,
-        printer: `${ip}:${port}`,
-      });
+    // Handle discovered peripherals
+    noble.on('discover', async (peripheral) => {
+      const peripheralMac = peripheral.address.toLowerCase().replace(/:/g, '');
+      const targetMac = macAddress.toLowerCase().replace(/:/g, '');
+      
+      if (peripheralMac === targetMac) {
+        console.log(`Found target printer: ${peripheral.address}`);
+        noble.stopScanning();
+        targetPeripheral = peripheral;
+
+        try {
+          // Connect to peripheral
+          await new Promise((connectResolve, connectReject) => {
+            peripheral.connect((error) => {
+              if (error) connectReject(error);
+              else connectResolve();
+            });
+          });
+
+          console.log('Connected to BLE printer');
+
+          // Discover services and characteristics
+          await new Promise((discoverResolve, discoverReject) => {
+            peripheral.discoverAllServicesAndCharacteristics((error, services, characteristics) => {
+              if (error) {
+                discoverReject(error);
+                return;
+              }
+
+              // Look for writable characteristic (common UUIDs for thermal printers)
+              const commonWriteUUIDs = [
+                '49535343-8841-43f4-a8d4-ecbe34729bb3', // Common thermal printer
+                '0000ff02-0000-1000-8000-00805f9b34fb', // Another common UUID
+                '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // Nordic UART TX
+              ];
+
+              writeCharacteristic = characteristics.find(char => 
+                char.properties.includes('write') || 
+                char.properties.includes('writeWithoutResponse') ||
+                commonWriteUUIDs.includes(char.uuid.toLowerCase())
+              );
+
+              if (writeCharacteristic) {
+                console.log(`Found write characteristic: ${writeCharacteristic.uuid}`);
+                discoverResolve();
+              } else {
+                discoverReject(new Error('No writable characteristic found'));
+              }
+            });
+          });
+
+          // Prepare print data
+          const commands = [];
+          commands.push(Buffer.from([0x1b, 0x40])); // ESC @ (Initialize printer)
+          commands.push(Buffer.from(content, "utf8"));
+          commands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // Line feeds
+          
+          const printData = Buffer.concat(commands);
+          
+          // Send data in chunks (BLE has MTU limitations, usually 20-512 bytes)
+          const chunkSize = 20; // Conservative chunk size
+          for (let i = 0; i < printData.length; i += chunkSize) {
+            const chunk = printData.slice(i, i + chunkSize);
+            
+            await new Promise((writeResolve, writeReject) => {
+              writeCharacteristic.write(chunk, false, (error) => {
+                if (error) writeReject(error);
+                else writeResolve();
+              });
+            });
+            
+            // Small delay between chunks
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+
+          // Send cut command
+          const cutCommand = Buffer.from([0x1d, 0x56, 0x00]);
+          await new Promise((writeResolve, writeReject) => {
+            writeCharacteristic.write(cutCommand, false, (error) => {
+              if (error) writeReject(error);
+              else writeResolve();
+            });
+          });
+
+          // Disconnect
+          peripheral.disconnect();
+          
+          if (!isResolved) {
+            isResolved = true;
+            cleanup();
+            resolve({
+              success: true,
+              message: "BLE print job sent successfully",
+              printer: macAddress,
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+        } catch (error) {
+          if (!isResolved) {
+            isResolved = true;
+            cleanup();
+            if (peripheral.state === 'connected') {
+              peripheral.disconnect();
+            }
+            resolve({
+              success: false,
+              message: `BLE print error: ${error.message}`,
+              printer: macAddress,
+            });
+          }
+        }
+      }
     });
+
+    // Handle noble errors
+    noble.on('warning', (message) => {
+      console.log('Noble warning:', message);
+    });
+
+    // Start the process if Bluetooth is already powered on
+    if (noble.state === 'poweredOn') {
+      console.log('Starting BLE scan for printer...');
+      noble.startScanning([], false);
+    }
   });
 }
-
 
 
 // Start server
