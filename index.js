@@ -178,10 +178,33 @@ async function sendJobToPrinter(ip, content, port = 9100, timeout = 5000) {
       timeout: timeout
     });
 
+    const [header, list, summary] = content
+
+    printer.newLine();
     printer.alignCenter();
-    let raw = await printer.raw(Buffer.from(content)); 
-    // printer.println(content);
-    // printer.newLine();
+    printer.bold(true);  
+    if(header.length > 0) {
+      header.forEach(h => {
+        printer.println(h)
+      });
+    }
+
+    printer.bold(false);  
+    printer.drawLine(); 
+    printer.alignRight(); 
+    if(list.length > 0) {
+      header.forEach(l => {
+        printer.println(l)
+      });
+    }
+
+    printer.drawLine(); 
+    if(summary.length > 0) {
+      header.forEach(s => {
+        printer.println(s)
+      });
+    }
+
     printer.newLine();
     printer.cut();
 
