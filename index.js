@@ -23,6 +23,45 @@ app.get("/test", (req, res) => {
 });
 
 // Print endpoint - POST /print
+app.post("/print-v2", async (req, res) => {
+
+try {
+    const { ip, content } = req.body;
+
+    // Validate required fields
+    if (!ip) {
+      return res.status(400).json({
+        success: false,
+        message: "Printer IP is required",
+      });
+    }
+
+    if (!content) {
+      return res.status(400).json({
+        success: false,
+        message: "Print content is required",
+      });
+    }
+
+    console.log({
+      message: "a print request received",
+      printer: ip,
+      content: content,
+    });
+
+    // Send to printer
+    const result = await sendJobToPrinter(ip, content);
+    res.json(result);
+  } catch (error) {
+    console.error("Print error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+
+})
+
 app.post("/print", async (req, res) => {
   try {
     const { ip, content } = req.body;
@@ -49,8 +88,8 @@ app.post("/print", async (req, res) => {
     });
 
     // Send to printer
-    const result = await sendToPrinter(ip, content);
-    // const result = await sendPrintCommand(ip, content);
+    // const result = await sendToPrinter(ip, content);
+    const result = await sendJobToPrinter(ip, content);
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -124,6 +163,43 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
         printer: `${ip}:${port}`,
       });
     });
+  });
+}
+
+// using node-thermal-printer library
+const ThermalPrinter = require('node-thermal-printer').printer;
+const PrinterTypes = require('node-thermal-printer').types;
+
+async function sendJobToPrinter(ip, content, port = 9100, timeout = 5000) {
+  return new Promise((resolve) => {
+    const printer = new ThermalPrinter({
+      type: PrinterTypes.EPSON,
+      interface: `tcp://${ip}:${port}`,
+      timeout: timeout
+    });
+
+    printer.alignCenter();
+    printer.println(content);
+    printer.newLine();
+    printer.newLine();
+    printer.cut();
+
+    printer.execute()
+      .then(() => {
+        resolve({
+          success: true,
+          message: "Print job sent successfully",
+          printer: `${ip}:${port}`,
+          timestamp: new Date().toISOString(),
+        });
+      })
+      .catch((err) => {
+        resolve({
+          success: false,
+          message: `Print failed: ${err.message}`,
+          printer: `${ip}:${port}`,
+        });
+      });
   });
 }
 
