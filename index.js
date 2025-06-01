@@ -171,7 +171,7 @@ const ThermalPrinter = require('node-thermal-printer').printer;
 const PrinterTypes = require('node-thermal-printer').types;
 
 async function sendJobToPrinter(ip, content, port = 9100, timeout = 5000) {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     const printer = new ThermalPrinter({
       type: PrinterTypes.EPSON,
       interface: `tcp://${ip}:${port}`,
@@ -179,8 +179,9 @@ async function sendJobToPrinter(ip, content, port = 9100, timeout = 5000) {
     });
 
     printer.alignCenter();
-    printer.println(content);
-    printer.newLine();
+    let raw = await printer.raw(Buffer.from(content)); 
+    // printer.println(content);
+    // printer.newLine();
     printer.newLine();
     printer.cut();
 
