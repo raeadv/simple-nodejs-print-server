@@ -92,9 +92,11 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
 
       socket.write(contentData);
 
-      // cut after write
-      const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-      socket.write(cutCommand);
+      setTimeout(() => {
+        // cut after write
+        const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
+        socket.write(cutCommand);
+      }, 500);
 
     });
 
