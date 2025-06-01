@@ -85,18 +85,17 @@ async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
 
       contentCommands.push(Buffer.from(content, "utf8"));
 
-      // contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
       contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
 
       const contentData = Buffer.concat(contentCommands);
 
       socket.write(contentData);
 
-      setTimeout(() => {
-        // cut after write
-        const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-        socket.write(cutCommand);
-      }, 500);
+      socket.write(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a]))
+
+        // const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
+        // socket.write(cutCommand);
 
     });
 
