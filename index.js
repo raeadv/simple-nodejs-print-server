@@ -22,10 +22,8 @@ app.get("/test", (req, res) => {
   });
 });
 
-// Print endpoint - POST /print
-app.post("/print-v2", async (req, res) => {
-
-try {
+app.post('/test-print', async (req, res) => {
+  try {
     const { ip, content } = req.body;
 
     // Validate required fields
@@ -50,7 +48,7 @@ try {
     });
 
     // Send to printer
-    const result = await sendJobToPrinter(ip, content);
+    const result = await testPrinter(ip, content);
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -59,12 +57,12 @@ try {
       message: error.message,
     });
   }
-
 })
 
+// Print endpoint - POST /print
 app.post("/print", async (req, res) => {
   try {
-    const { ip, content, listOnly, context } = req.body;
+    const { ip, content, listOnly } = req.body;
 
     // Validate required fields
     if (!ip) {
@@ -86,12 +84,10 @@ app.post("/print", async (req, res) => {
       printer: ip,
       content: content,
       listOnly: listOnly,
-      context: context,
     });
 
     // Send to printer
-    // const result = await sendToPrinter(ip, content);
-    const result = await sendJobToPrinter(ip, content, context, listOnly,);
+    const result = await sendJobToPrinter(ip, content, listOnly);
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -107,7 +103,7 @@ app.post("/print", async (req, res) => {
 const ThermalPrinter = require('node-thermal-printer').printer;
 const PrinterTypes = require('node-thermal-printer').types;
 
-async function sendJobToPrinter(ip, content,context, listOnly = false, port = 9100, timeout = 5000) {
+async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, timeout = 5000) {
   return new Promise(async (resolve) => {
     const printer = new ThermalPrinter({
       type: PrinterTypes.EPSON,
@@ -115,7 +111,7 @@ async function sendJobToPrinter(ip, content,context, listOnly = false, port = 91
       timeout: timeout
     });
 
-    const [header, list, summary] = content
+    const [header, list, summary, orderInfo] = content
 
     
     if(!listOnly){
@@ -130,11 +126,11 @@ async function sendJobToPrinter(ip, content,context, listOnly = false, port = 91
         printer.bold(false);  
       } else {
 
-        const {table_info, order_date} = context
+        const {table_info, order_date, orderType} = orderInfo
         
         printer.alignCenter();
         printer.bold(true);  
-        printer.println(table_info)
+        printer.println(`${orderType} | ${table_info}`)
         printer.println(order_date)
         printer.bold(false);  
     }
@@ -221,3 +217,73 @@ testApp.listen(TEST_PORT, () => {
 });
 
 // module.exports = app;
+
+
+// for testing purpose
+async function testPrinter(ip, content, port = 9100, timeout = 5000) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+
+    // // Convert content to raw printer commands
+    // Set timeout
+    const timeoutHandler = setTimeout(() => {
+      socket.destroy();
+      resolve({
+        success: false,
+        message: "Connection timeout",
+        printer: `${ip}:${port}`,
+      });
+    }, timeout);
+
+    // Connect to printer
+    socket.connect(port, ip, () => {
+      // Send content first (without cut command)
+      const contentCommands = [];
+      contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @
+
+      contentCommands.push(Buffer.from(content, "utf8"));
+
+      // contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      
+      const contentData = Buffer.concat(contentCommands);
+      
+      socket.write(contentData);
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
+
+      // cut after write
+      const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
+      socket.write(cutCommand);
+
+    });
+
+
+    // Handle successful close
+    socket.on("close", () => {
+      if (!socket.destroyed) {
+        clearTimeout(timeoutHandler);
+        console.log(`Print job sent to ${ip}:${port}`);
+        resolve({
+          success: true,
+          message: "Print job sent successfully",
+          printer: `${ip}:${port}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Handle errors
+    socket.on("error", (err) => {
+      clearTimeout(timeoutHandler);
+      console.error(`Print error for ${ip}:${port}:`, err.message);
+      resolve({
+        success: false,
+        message: `Print failed: ${err.message}`,
+        printer: `${ip}:${port}`,
+      });
+    });
+  });
+}

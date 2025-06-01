@@ -96,17 +96,6 @@
         color: #721c24;
       }
 
-      .code-example {
-        background: #2d3748;
-        color: #e2e8f0;
-        padding: 15px;
-        border-radius: 5px;
-        font-family: "Courier New", monospace;
-        font-size: 14px;
-        margin: 15px 0;
-        overflow-x: auto;
-      }
-
       .info-box {
         background: #e7f3ff;
         border: 1px solid #b8daff;
@@ -123,11 +112,13 @@
       <div class="info-box">
         <strong>Server Endpoints:</strong><br />
         • GET /test - Check if server is running<br />
-        • POST /print - Send print job with IP and content
+        • POST /test-print - Send print job with IP and content
       </div>
 
       <div class="form-group">
-        <button onclick="testServer()">Test Server Connection</button>
+        <div style="display: flex;width: 100%; justify-content: center;">
+          <button onclick="testServer()">Test Server Connection</button>
+        </div>
         <div id="testResult" class="result" style="display: none"></div>
       </div>
 
@@ -141,16 +132,6 @@
         />
       </div>
 
-      <!-- <div class="form-group">
-        <label for="printerMac">Printer MAC Address (Bluetooth):</label>
-        <input
-          type="text"
-          id="printerMac"
-          placeholder="A1:B2:C3:D4:E5:F6"
-          value="A1:B2:C3:D4:E5:F6"
-        />
-      </div> -->
-
       <div class="form-group">
         <label for="printContent">Content to Print:</label>
         <textarea
@@ -158,50 +139,24 @@
           rows="8"
           placeholder="Enter text to print..."
         >
-Hello World!
+          Hello Printer!
 
-This is a test print from the web browser.
-Timestamp: ${new Date().toLocaleString()}
+          This is a test print from the web browser.
+          Timestamp: ${new Date().toLocaleString()}
 
-Thank you for testing!</textarea
-        >
+          Thank you for testing!
+        </textarea>
       </div>
 
       <div class="form-group">
-        <button onclick="sendPrintJob()">Send to Printer</button>
-        <!-- <button onclick="sendBtPrintJob()">Send to BT Printer</button> -->
-        <button onclick="clearResults()">Clear Results</button>
+        <div style="display: flex;width: 100%; justify-content: center;">
+          <button onclick="sendPrintJob()">Send to Printer</button>
+          <button onclick="clearResults()">Clear Results</button>
+        </div>
       </div>
 
       <div id="printResult" class="result" style="display: none"></div>
 
-      <h2>📝 JavaScript Code Examples</h2>
-
-      <h3>Test Server Function:</h3>
-      <div class="code-example">
-        async function testServer() { try { const response = await
-        fetch('http://localhost:8080/test'); const result = await
-        response.json(); console.log('Server test:', result); return result; }
-        catch (error) { console.error('Server test failed:', error); return {
-        success: false, message: error.message }; } }
-      </div>
-
-      <h3>Print Function:</h3>
-      <div class="code-example">
-        async function sendPrint(printerIp, content) { try { const response =
-        await fetch('http://localhost:8080/print', { method: 'POST', headers: {
-        'Content-Type': 'application/json', }, body: JSON.stringify({ ip:
-        printerIp, content: content }) }); const result = await response.json();
-        return result; } catch (error) { console.error('Print failed:', error);
-        return { success: false, message: error.message }; } }
-      </div>
-
-      <h3>Simple Usage Example:</h3>
-      <div class="code-example">
-        // Test the server const serverStatus = await testServer();
-        console.log(serverStatus); // Send a print job const printResult = await
-        sendPrint('192.168.1.33', 'Hello Printer!'); console.log(printResult);
-      </div>
     </div>
 
     <script>
@@ -258,7 +213,7 @@ Thank you for testing!</textarea
         resultDiv.className = "result";
 
         try {
-          const response = await fetch(`${PRINT_SERVER_URL}/print`, {
+          const response = await fetch(`${PRINT_SERVER_URL}/test-print`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
