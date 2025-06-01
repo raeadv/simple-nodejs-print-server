@@ -64,7 +64,7 @@ try {
 
 app.post("/print", async (req, res) => {
   try {
-    const { ip, content } = req.body;
+    const { ip, content, listOnly, context } = req.body;
 
     // Validate required fields
     if (!ip) {
@@ -85,11 +85,13 @@ app.post("/print", async (req, res) => {
       message: "a print request received",
       printer: ip,
       content: content,
+      listOnly: listOnly,
+      context: context,
     });
 
     // Send to printer
     // const result = await sendToPrinter(ip, content);
-    const result = await sendJobToPrinter(ip, content);
+    const result = await sendJobToPrinter(ip, content, context, listOnly,);
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -100,77 +102,12 @@ app.post("/print", async (req, res) => {
   }
 });
 
-// Function to send data to printer
-async function sendToPrinter(ip, content, port = 9100, timeout = 5000) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-
-    // // Convert content to raw printer commands
-    // Set timeout
-    const timeoutHandler = setTimeout(() => {
-      socket.destroy();
-      resolve({
-        success: false,
-        message: "Connection timeout",
-        printer: `${ip}:${port}`,
-      });
-    }, timeout);
-
-    // Connect to printer
-    socket.connect(port, ip, () => {
-      // Send content first (without cut command)
-      const contentCommands = [];
-      contentCommands.push(Buffer.from([0x1b, 0x40])); // ESC @
-
-      contentCommands.push(Buffer.from(content, "utf8"));
-
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-      contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-
-      const contentData = Buffer.concat(contentCommands);
-
-      socket.write(contentData);
-
-      socket.write(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a]))
-
-        // const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
-        // socket.write(cutCommand);
-
-    });
-
-
-    // Handle successful close
-    socket.on("close", () => {
-      if (!socket.destroyed) {
-        clearTimeout(timeoutHandler);
-        console.log(`Print job sent to ${ip}:${port}`);
-        resolve({
-          success: true,
-          message: "Print job sent successfully",
-          printer: `${ip}:${port}`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    });
-
-    // Handle errors
-    socket.on("error", (err) => {
-      clearTimeout(timeoutHandler);
-      console.error(`Print error for ${ip}:${port}:`, err.message);
-      resolve({
-        success: false,
-        message: `Print failed: ${err.message}`,
-        printer: `${ip}:${port}`,
-      });
-    });
-  });
-}
 
 // using node-thermal-printer library
 const ThermalPrinter = require('node-thermal-printer').printer;
 const PrinterTypes = require('node-thermal-printer').types;
 
-async function sendJobToPrinter(ip, content, port = 9100, timeout = 5000) {
+async function sendJobToPrinter(ip, content,context, listOnly = false, port = 9100, timeout = 5000) {
   return new Promise(async (resolve) => {
     const printer = new ThermalPrinter({
       type: PrinterTypes.EPSON,
@@ -180,29 +117,53 @@ async function sendJobToPrinter(ip, content, port = 9100, timeout = 5000) {
 
     const [header, list, summary] = content
 
-    printer.newLine();
-    printer.alignCenter();
-    printer.bold(true);  
-    if(header.length > 0) {
-      header.forEach(h => {
-        printer.println(h)
-      });
-    }
+    
+    if(!listOnly){
+        printer.newLine();
+        printer.alignCenter();
+        printer.bold(true);  
+        if(header.length > 0) {
+          header.forEach(h => {
+            printer.println(h)
+          });
+        }
+        printer.bold(false);  
+      } else {
 
-    printer.bold(false);  
+        const {table_info, order_date} = context
+        
+        printer.alignCenter();
+        printer.bold(true);  
+        printer.println(table_info)
+        printer.println(order_date)
+        printer.bold(false);  
+    }
     printer.drawLine(); 
-    printer.alignRight(); 
+
+    printer.alignLeft(); 
     if(list.length > 0) {
-      header.forEach(l => {
-        printer.println(l)
+      list.forEach(l => {
+        if(listOnly) {
+            printer.leftRight(l[0], l[1] || '')
+            // printer.alignCenter(l.join(' '))
+        } else {
+          printer.leftRight(l[0], l[1]);
+          if(l.length > 2) {
+            printer.leftRight(l[3] || '');
+          } 
+        }
+      
       });
     }
 
-    printer.drawLine(); 
-    if(summary.length > 0) {
-      header.forEach(s => {
-        printer.println(s)
-      });
+    if(!listOnly){
+      printer.drawLine(); 
+      printer.alignRight();
+      if(summary.length > 0) {
+        summary.forEach(s => {
+          printer.println(s)
+        });
+      }
     }
 
     printer.newLine();
