@@ -144,7 +144,12 @@ async function sendJobToPrinter(ip, content,context, listOnly = false, port = 91
     if(list.length > 0) {
       list.forEach(l => {
         if(listOnly) {
-            printer.println(l[0] +'  '+ l[1] || '')
+            let ll = l[0]
+            if(l[1]) {
+              ll += `  ${l[1]}`
+            }
+
+            printer.println(ll)
             // printer.alignCenter(l.join(' '))
         } else {
           printer.leftRight(l[0], l[1]);
