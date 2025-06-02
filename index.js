@@ -189,34 +189,6 @@ async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, time
   });
 }
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`
-🖨️  Simple Print Service Started
-📡 Port: ${PORT}
-🌐 Test: http://localhost:${PORT}/test
-  `);
-});
-
-// start another for test page
-const testApp = express();
-const TEST_PORT = 8000;
-
-testApp.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "testpage.html"));
-});
-
-
-// Start server
-testApp.listen(TEST_PORT, () => {
-  console.log(`
-🖨️  Test page started
-📡 Port: ${TEST_PORT}
-🌐 url: http://localhost:${TEST_PORT}/
-  `);
-});
-
-// module.exports = app;
 
 
 // for testing purpose
@@ -287,3 +259,32 @@ async function testPrinter(ip, content, port = 9100, timeout = 5000) {
     });
   });
 }
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`
+🖨️  Simple Print Service Started
+📡 Port: ${PORT}
+🌐 Test: http://localhost:${PORT}/test
+  `);
+});
+
+// start another for test page
+const testApp = express();
+const TEST_PORT = 8000;
+
+testApp.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "testpage.html"));
+});
+
+
+// Start server
+testApp.listen(TEST_PORT, () => {
+  console.log(`
+🖨️  Test page started
+📡 Port: ${TEST_PORT}
+🌐 url: http://localhost:${TEST_PORT}/
+  `);
+});
+
+// module.exports = app;
