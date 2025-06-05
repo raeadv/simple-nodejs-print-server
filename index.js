@@ -6,6 +6,8 @@ const cors = require("cors");
 const path = require("path");
 const app = express();
 
+const Buffer = require("node:buffer");
+
 const PORT = 8080;
 
 // Middleware
@@ -14,7 +16,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.text({ limit: "10mb" }));
 
 // Test endpoint - GET /test
-app.get("/test", (req, res) => {
+app.get("/test", (_, res) => {
   res.json({
     status: "ok",
     message: "Print service is running",
@@ -22,7 +24,7 @@ app.get("/test", (req, res) => {
   });
 });
 
-app.post('/test-print', async (req, res) => {
+app.post("/test-print", async (req, res) => {
   try {
     const { ip, content } = req.body;
 
@@ -57,7 +59,7 @@ app.post('/test-print', async (req, res) => {
       message: error.message,
     });
   }
-})
+});
 
 // Print endpoint - POST /print
 app.post("/print", async (req, res) => {
@@ -98,99 +100,100 @@ app.post("/print", async (req, res) => {
   }
 });
 
-
 // using node-thermal-printer library
-const ThermalPrinter = require('node-thermal-printer').printer;
-const PrinterTypes = require('node-thermal-printer').types;
+const ThermalPrinter = require("node-thermal-printer").printer;
+const PrinterTypes = require("node-thermal-printer").types;
 
-async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, timeout = 5000) {
-  return new Promise(async (resolve) => {
-    const printer = new ThermalPrinter({
-      type: PrinterTypes.EPSON,
-      interface: `tcp://${ip}:${port}`,
-      timeout: timeout
-    });
+function sendJobToPrinter(
+  ip,
+  content,
+  listOnly = false,
+  port = 9100,
+  timeout = 5000,
+) {
+  return new Promise((resolve) => {
+    try {
+      const printer = new ThermalPrinter({
+        type: PrinterTypes.EPSON,
+        interface: `tcp://${ip}:${port}`,
+        timeout: timeout,
+      });
 
-    const [header, list, summary, orderInfo] = content
+      const [header, list, summary, orderInfo] = content;
 
-    
-    if(!listOnly){
+      if (!listOnly) {
         printer.alignCenter();
-        printer.bold(true);  
-        if(header.length > 0) {
-          header.forEach(h => {
-            printer.println(h)
+        printer.bold(true);
+        if (header.length > 0) {
+          header.forEach((h) => {
+            printer.println(h);
           });
         }
-        printer.drawLine(); 
-        printer.bold(false);  
+        printer.drawLine();
+        printer.bold(false);
       } else {
+        const { table_info, order_date, orderType } = orderInfo;
 
-        const {table_info, order_date, orderType} = orderInfo
-        
         printer.alignCenter();
-        printer.bold(true);  
-        printer.println(`${orderType} | ${table_info}`)
-        printer.println(order_date)
-        printer.bold(false);  
-    }
+        printer.bold(true);
+        printer.println(`${orderType} | ${table_info}`);
+        printer.println(order_date);
+        printer.bold(false);
+      }
 
-    printer.alignLeft(); 
-    if(list.length > 0) {
-      list.forEach(l => {
-        if(listOnly) {
-            let ll = l[0]
-            if(l[1] ) {
-              ll += `  ${l[1]}`
+      printer.alignLeft();
+      if (list.length > 0) {
+        list.forEach((l) => {
+          if (listOnly) {
+            let ll = l[0];
+            if (l[1]) {
+              ll += `  ${l[1]}`;
             }
-            printer.println(ll)
-        } else {
-          printer.leftRight(l[0], l[1]);
-          if(l.length > 2) {
-            printer.leftRight(l[3] || '');
-          } 
-        }
-      
-      });
-    }
-
-    if(!listOnly){
-      printer.bold(true);
-      printer.drawLine(); 
-      printer.bold(false);
-      printer.alignRight();
-      if(summary.length > 0) {
-        summary.forEach(s => {
-          printer.println(s)
+            printer.println(ll);
+          } else {
+            printer.leftRight(l[0], l[1]);
+            if (l.length > 2) {
+              printer.leftRight(l[3] || "");
+            }
+          }
         });
       }
-    }
-    printer.cut();
-    printer.clear();
 
-    printer.execute()
-      .then(() => {
-        resolve({
-          success: true,
-          message: "Print job sent successfully",
-          printer: `${ip}:${port}`,
-          timestamp: new Date().toISOString(),
-        });
-      })
-      .catch((err) => {
-        resolve({
-          success: false,
-          message: `Print failed: ${err.message}`,
-          printer: `${ip}:${port}`,
-        });
+      if (!listOnly) {
+        printer.bold(true);
+        printer.drawLine();
+        printer.bold(false);
+        printer.alignRight();
+        if (summary.length > 0) {
+          summary.forEach((s) => {
+            printer.println(s);
+          });
+        }
+      }
+
+      printer.cut();
+      printer.execute("", true);
+      printer.clear();
+
+      return resolve({
+        success: true,
+        message: "Print job sent successfully",
+        printer: `${ip}:${port}`,
+        timestamp: new Date().toISOString(),
       });
+    } catch (err) {
+      printer.clear();
+      return resolve({
+        success: false,
+        message: `Print failed: ${err.message}`,
+        printer: `${ip}:${port}`,
+      });
+    }
   });
 }
 
-
-
 // for testing purpose
-async function testPrinter(ip, content, port = 9100, timeout = 5000) {
+function testPrinter(ip, content, port = 9100, timeout = 5000) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
 
@@ -215,9 +218,9 @@ async function testPrinter(ip, content, port = 9100, timeout = 5000) {
 
       // contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
       contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
-      
+
       const contentData = Buffer.concat(contentCommands);
-      
+
       socket.write(contentData);
       contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
       contentCommands.push(Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x0a])); // LF LF
@@ -227,9 +230,7 @@ async function testPrinter(ip, content, port = 9100, timeout = 5000) {
       // cut after write
       const cutCommand = Buffer.from([0x1d, 0x56, 0x00]); // GS V 0
       socket.write(cutCommand);
-
     });
-
 
     // Handle successful close
     socket.on("close", () => {
@@ -271,10 +272,9 @@ app.listen(PORT, () => {
 const testApp = express();
 const TEST_PORT = 8000;
 
-testApp.get("/", (req, res) => {
+testApp.get("/", (_, res) => {
   res.sendFile(path.join(__dirname, "testpage.html"));
 });
-
 
 // Start server
 testApp.listen(TEST_PORT, () => {
