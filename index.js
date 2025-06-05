@@ -115,7 +115,6 @@ async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, time
 
     
     if(!listOnly){
-        printer.newLine();
         printer.alignCenter();
         printer.bold(true);  
         if(header.length > 0) {
@@ -123,6 +122,7 @@ async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, time
             printer.println(h)
           });
         }
+        printer.drawLine(); 
         printer.bold(false);  
       } else {
 
@@ -134,19 +134,16 @@ async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, time
         printer.println(order_date)
         printer.bold(false);  
     }
-    printer.drawLine(); 
 
     printer.alignLeft(); 
     if(list.length > 0) {
       list.forEach(l => {
         if(listOnly) {
             let ll = l[0]
-            if(l[1]) {
+            if(l[1] ) {
               ll += `  ${l[1]}`
             }
-
             printer.println(ll)
-            // printer.alignCenter(l.join(' '))
         } else {
           printer.leftRight(l[0], l[1]);
           if(l.length > 2) {
@@ -158,7 +155,9 @@ async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, time
     }
 
     if(!listOnly){
+      printer.bold(true);
       printer.drawLine(); 
+      printer.bold(false);
       printer.alignRight();
       if(summary.length > 0) {
         summary.forEach(s => {
@@ -166,9 +165,8 @@ async function sendJobToPrinter(ip, content, listOnly = false, port = 9100, time
         });
       }
     }
-
-    printer.newLine();
     printer.cut();
+    printer.clear();
 
     printer.execute()
       .then(() => {
