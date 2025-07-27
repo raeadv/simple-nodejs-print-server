@@ -111,9 +111,10 @@ function sendJobToPrinter(
   port = 9100,
   timeout = 5000,
 ) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let printer;
     try {
-      const printer = new ThermalPrinter({
+      printer = new ThermalPrinter({
         type: PrinterTypes.EPSON,
         interface: `tcp://${ip}:${port}`,
         timeout: timeout,
@@ -172,17 +173,27 @@ function sendJobToPrinter(
       }
 
       printer.cut();
-      printer.execute("", true);
-      printer.clear();
-
-      return resolve({
-        success: true,
-        message: "Print job sent successfully",
-        printer: `${ip}:${port}`,
-        timestamp: new Date().toISOString(),
-      });
+      
+      printer.execute()
+        .then(() => {
+          if (printer) printer.clear();
+          resolve({
+            success: true,
+            message: "Print job sent successfully",
+            printer: `${ip}:${port}`,
+            timestamp: new Date().toISOString(),
+          });
+        })
+        .catch((err) => {
+          if (printer) printer.clear();
+          resolve({
+            success: false,
+            message: `Print failed: ${err.message}`,
+            printer: `${ip}:${port}`,
+          });
+        });
     } catch (err) {
-      printer.clear();
+      if (printer) printer.clear();
       return resolve({
         success: false,
         message: `Print failed: ${err.message}`,
@@ -258,6 +269,15 @@ function testPrinter(ip, content, port = 9100, timeout = 5000) {
     });
   });
 }
+
+// Global error handlers to prevent crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
 
 // Start server
 app.listen(PORT, () => {
