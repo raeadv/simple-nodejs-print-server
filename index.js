@@ -111,7 +111,7 @@ function sendJobToPrinter(
   port = 9100,
   timeout = 5000,
 ) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let printer;
     try {
       printer = new ThermalPrinter({
@@ -120,7 +120,29 @@ function sendJobToPrinter(
         timeout: timeout,
       });
 
+      // Add debugging and validation
+      console.log("Content received:", JSON.stringify(content, null, 2));
+      
+      // Validate content structure
+      if (!Array.isArray(content) || content.length < 4) {
+        throw new Error(`Invalid content format. Expected array with 4 elements, got: ${typeof content}`);
+      }
+
       const [header, list, summary, orderInfo] = content;
+      
+      // Validate each component
+      if (!Array.isArray(header)) {
+        throw new Error(`Header must be an array, got: ${typeof header}`);
+      }
+      if (!Array.isArray(list)) {
+        throw new Error(`List must be an array, got: ${typeof list}`);
+      }
+      if (!Array.isArray(summary)) {
+        throw new Error(`Summary must be an array, got: ${typeof summary}`);
+      }
+      if (!orderInfo || typeof orderInfo !== 'object') {
+        throw new Error(`OrderInfo must be an object, got: ${typeof orderInfo}`);
+      }
 
       if (!listOnly) {
         printer.alignCenter();
@@ -146,13 +168,13 @@ function sendJobToPrinter(
       if (list.length > 0) {
         list.forEach((l) => {
           if (listOnly) {
-            let ll = l[0];
+            let ll = l[0] || '';
             if (l[1]) {
-              ll += `  ${l[1]}`;
+              ll += l[1] ? `  ${l[1]}` : '';
             }
             printer.println(ll);
           } else {
-            printer.leftRight(l[0], l[1]);
+            printer.leftRight(l[0] || '', l[1] || '');
             if (l.length > 2) {
               printer.leftRight(l[3] || "");
             }
@@ -188,7 +210,7 @@ function sendJobToPrinter(
           if (printer) printer.clear();
           resolve({
             success: false,
-            message: `Print failed: ${err.message}`,
+            message: `Print failed 01 : ${err.message}`,
             printer: `${ip}:${port}`,
           });
         });
@@ -196,7 +218,7 @@ function sendJobToPrinter(
       if (printer) printer.clear();
       return resolve({
         success: false,
-        message: `Print failed: ${err.message}`,
+        message: `Print failed 02: ${err.message}`,
         printer: `${ip}:${port}`,
       });
     }
