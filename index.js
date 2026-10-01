@@ -66,6 +66,11 @@ app.post("/print", async (req, res) => {
   try {
     const { ip, content, listOnly } = req.body;
 
+    let qrString = null
+    if (req.body.tdid) {
+        qrString = req.body.tdid
+    }
+
     // Validate required fields
     if (!ip) {
       return res.status(400).json({
@@ -84,12 +89,12 @@ app.post("/print", async (req, res) => {
     console.log({
       message: "a print request received",
       printer: ip,
-      content: content,
+      content: req.body,
       listOnly: listOnly,
     });
 
     // Send to printer
-    const result = await sendJobToPrinter(ip, content, listOnly);
+    const result = await sendJobToPrinter(ip, content, listOnly, {qr: qrString});
     res.json(result);
   } catch (error) {
     console.error("Print error:", error);
@@ -108,28 +113,35 @@ function sendJobToPrinter(
   ip,
   content,
   listOnly = false,
-  port = 9100,
-  timeout = 5000,
+  optional = {}
 ) {
+
+  const printerPort = 9100
+  const printerTimeout = 5000
+
   return new Promise((resolve, _reject) => {
     let printer;
     try {
       printer = new ThermalPrinter({
         type: PrinterTypes.EPSON,
-        interface: `tcp://${ip}:${port}`,
-        timeout: timeout,
+        interface: `tcp://${ip}:${printerPort}`,
+        timeout: printerTimeout,
       });
 
       // Add debugging and validation
-      console.log("Content received:", JSON.stringify(content, null, 2));
+      console.log("Content received:", JSON.stringify(content, null, 2), ip, optional);
       
       // Validate content structure
       if (!Array.isArray(content) || content.length < 4) {
         throw new Error(`Invalid content format. Expected array with 4 elements, got: ${typeof content}`);
       }
 
-      const [header, list, summary, orderInfo] = content;
-      
+      // 5th element is optional: extra blocks (e.g. untaxed items) printed
+      // after the main summary, each preceded by a partial cut so they stay
+      // on one strip of paper instead of separate receipts. Absent for every
+      // print job that has nothing to split - fully backward compatible.
+      const [header, list, summary, orderInfo, extraSections] = content;
+
       // Validate each component
       if (!Array.isArray(header)) {
         throw new Error(`Header must be an array, got: ${typeof header}`);
@@ -143,6 +155,26 @@ function sendJobToPrinter(
       if (!orderInfo || typeof orderInfo !== 'object') {
         throw new Error(`OrderInfo must be an object, got: ${typeof orderInfo}`);
       }
+      if (extraSections !== undefined && !Array.isArray(extraSections)) {
+        throw new Error(`extraSections must be an array when present, got: ${typeof extraSections}`);
+      }
+
+      const printItemLines = (items) => {
+        items.forEach((l) => {
+          if (listOnly) {
+            let ll = l[0] || '';
+            if (l[1]) {
+              ll += l[1] ? `  ${l[1]}` : '';
+            }
+            printer.println(ll);
+          } else {
+            printer.leftRight(l[0] || '', l[1] || '');
+            if (l.length > 2) {
+              printer.leftRight(l[3] || "");
+            }
+          }
+        });
+      };
 
       if (!listOnly) {
         printer.alignCenter();
@@ -160,26 +192,22 @@ function sendJobToPrinter(
         printer.alignCenter();
         printer.bold(true);
         printer.println(`${orderType} | ${table_info}`);
+        
+        if(orderInfo?.printer_name) {
+          printer.println(orderInfo.printer_name);
+        }
+        
         printer.println(order_date);
+        
+        if(orderInfo?.note) {
+          printer.println(orderInfo.note);
+        }
         printer.bold(false);
       }
 
       printer.alignLeft();
       if (list.length > 0) {
-        list.forEach((l) => {
-          if (listOnly) {
-            let ll = l[0] || '';
-            if (l[1]) {
-              ll += l[1] ? `  ${l[1]}` : '';
-            }
-            printer.println(ll);
-          } else {
-            printer.leftRight(l[0] || '', l[1] || '');
-            if (l.length > 2) {
-              printer.leftRight(l[3] || "");
-            }
-          }
-        });
+        printItemLines(list);
       }
 
       if (!listOnly) {
@@ -194,6 +222,33 @@ function sendJobToPrinter(
         }
       }
 
+      if (!listOnly && Array.isArray(extraSections) && extraSections.length > 0) {
+        extraSections.forEach((section) => {
+          printer.partialCut();
+          printer.println('');
+
+          printer.alignLeft();
+          printItemLines(section.list || []);
+
+          printer.bold(true);
+          printer.drawLine();
+          printer.bold(false);
+          printer.alignRight();
+          (section.summary || []).forEach((s) => {
+            printer.println(s);
+          });
+        });
+      }
+
+
+      if(optional.qr) {
+        printer.alignCenter();
+        printer.printQR(optional.qr, {
+          cellSize: 8,
+          model: 2,
+        })
+      }
+
       printer.cut();
       
       printer.execute()
@@ -202,7 +257,7 @@ function sendJobToPrinter(
           resolve({
             success: true,
             message: "Print job sent successfully",
-            printer: `${ip}:${port}`,
+            printer: `${ip}:${printerPort}`,
             timestamp: new Date().toISOString(),
           });
         })
@@ -211,7 +266,7 @@ function sendJobToPrinter(
           resolve({
             success: false,
             message: `Print failed 01 : ${err.message}`,
-            printer: `${ip}:${port}`,
+            printer: `${ip}:${printerPort}`,
           });
         });
     } catch (err) {
@@ -219,7 +274,7 @@ function sendJobToPrinter(
       return resolve({
         success: false,
         message: `Print failed 02: ${err.message}`,
-        printer: `${ip}:${port}`,
+        printer: `${ip}:${printerPort}`,
       });
     }
   });
